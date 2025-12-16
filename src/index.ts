@@ -4,6 +4,13 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { InferenceClient } from '@huggingface/inference'
 
+// Optional: Configuration schema for user settings
+export const configSchema = z.object({
+    HF_TOKEN: z.string().describe('Hugging Face API 토큰 (이미지 생성에 필요)')
+})
+
+// Required: Export default createServer function for Smithery
+export default function createServer({ config }: { config?: z.infer<typeof configSchema> }) {
 // Create server instance
 const server = new McpServer({
     name: 'my-mcp-server',
@@ -555,10 +562,10 @@ server.registerTool(
     },
     async ({ prompt }) => {
         try {
-            // Hugging Face API 토큰 확인
-            const hfToken = process.env.HF_TOKEN
+            // Hugging Face API 토큰 확인 (config 또는 환경 변수에서 가져오기)
+            const hfToken = config?.HF_TOKEN || process.env.HF_TOKEN
             if (!hfToken) {
-                throw new Error('HF_TOKEN 환경 변수가 설정되지 않았습니다.')
+                throw new Error('HF_TOKEN 환경 변수 또는 설정이 필요합니다.')
             }
 
             const client = new InferenceClient(hfToken)
@@ -777,9 +784,25 @@ ${code}
     }
 )
 
+    // Must return the MCP server object for Smithery
+    return server.server
+}
+
+// Local development: If running directly (not imported), start stdio transport
+// This allows Cursor and other MCP clients to connect locally
+// Smithery imports this module, so we only start stdio when run directly
+const isDirectExecution = process.argv[1] && (
+    process.argv[1].endsWith('index.js') || 
+    process.argv[1].endsWith('index.ts') ||
+    process.argv[1].includes('build/index.js')
+)
+
+if (isDirectExecution) {
+    const server = createServer({ config: undefined })
 server
     .connect(new StdioServerTransport())
     .catch(console.error)
     .then(() => {
-        console.log('MCP server started')
+            console.error('MCP server started (local mode)')
     })
+}
