@@ -718,10 +718,10 @@ server.registerPrompt(
     'code-review',
     {
         description: '사용자가 제공한 코드를 기반으로 코드 리뷰를 수행하는 프롬프트를 생성합니다.',
-        argsSchema: {
+        argsSchema: z.object({
             code: z.string().describe('리뷰할 코드'),
             language: z.string().optional().describe('프로그래밍 언어 (예: TypeScript, JavaScript, Python 등)')
-        }
+        })
     },
     async ({ code, language }) => {
         // 코드 리뷰 프롬프트 템플릿
@@ -788,21 +788,23 @@ ${code}
     return server.server
 }
 
-// Local development: If running directly (not imported), start stdio transport
-// This allows Cursor and other MCP clients to connect locally
-// Smithery imports this module, so we only start stdio when run directly
+// Local development: Only start stdio transport when running directly (not imported by Smithery)
+// Smithery imports this module, so we check if we're being run directly
+// When imported as a module by Smithery, this code should not execute
+// We check if process.argv[1] matches our entry point file
 const isDirectExecution = process.argv[1] && (
     process.argv[1].endsWith('index.js') || 
     process.argv[1].endsWith('index.ts') ||
-    process.argv[1].includes('build/index.js')
-)
+    process.argv[1].includes('build/index.js') ||
+    process.argv[1].includes('src/index.ts')
+) && !process.env.SMITHERY_DEPLOYMENT
 
 if (isDirectExecution) {
     const server = createServer({ config: undefined })
-server
-    .connect(new StdioServerTransport())
-    .catch(console.error)
-    .then(() => {
+    server
+        .connect(new StdioServerTransport())
+        .catch(console.error)
+        .then(() => {
             console.error('MCP server started (local mode)')
-    })
+        })
 }
